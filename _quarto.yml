@@ -1,0 +1,21 @@
+project:
+  type: website
+
+website:
+  title: "Raphaël"
+  site-url: ""
+  repo-url: ""
+  repo-actions: issue
+  navbar:
+    right:
+      - text: "About"
+        href: about.qmd
+
+format:
+  html:
+    code-block-border-left: true
+    smooth-scroll: true
+    link-external-newwindow: true
+    
+editor: source
+

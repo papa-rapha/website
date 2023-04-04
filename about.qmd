@@ -1,0 +1,22 @@
+---
+title: "Raphaël"
+image: profile.jpg
+about:
+  template: trestles
+  links:
+    - icon: linkedin
+      text: LinkedIn
+      href: https://www.linkedin.com/in/raphaelnedellec/
+    - icon: github
+      text: Github
+      href: https://github.com/papa-rapha
+
+---
+
+This is an attempt at blogging - a lil' bit, about everything and nothing, but mostly stats, R and Python. 
+
+After 7 years at [EDF R&D](https://www.edf.fr/en/the-edf-group/inventing-the-future-of-energy/r-d-global-expertise) as a research engineer in data science, specialized in forecasting for energy markets and energy networks, I joined [Talend](https://www.talend.com/) as a lead data scientist to develop ML tools and features in Talend's product. I'm about to join a new company and start a new position. Stay tuned.
+
+I also enjoy teaching when I can. I did teach in the past at [Ensai](https://ensai.fr/en/), [CEPE](https://www.lecepe.fr/), [Dauphine University](https://dauphine.psl.eu/en/training/masters-degrees/quantitative-economics/m2-digital-economics), [Nantes Université](https://iae.univ-nantes.fr/nos-formations/offre-de-formation/master-econometrie-statistiques).
+
+

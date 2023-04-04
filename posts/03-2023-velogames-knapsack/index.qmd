@@ -1,0 +1,457 @@
+---
+title: "What was the best Rivals manager team possible? A knapsack problem."
+author: "Raphaël"
+date: "2023-03-30"
+categories: [cycling, R, web-scraping, optimization]
+knitr:
+  opts_chunk: 
+    echo: true
+format:
+  html:
+    toc: true
+    self-contained: true
+    code-fold: true
+---
+
+# Rivals manager: introduction
+
+I've been playing at [Rivals manager](http://velo-club.com/general.php) for a while. It's a fantasy cycling game rolling all over the season. The principle is simple, you select a team of 30 to 35 riders before the beginning of the season, and they will score points riding and performing during the cycling road season, from January to October. There are a few constraint though:
+
+- Riders all have a cotation. Cheaper riders cost 3 credits, while the most expensive riders cost around 35-38 credits depending on their performances during past seasons.
+- Your team has to have between 30 to 35 riders. You have to find a balance between expensive and already accomplished riders and young guns or lesser known riders who didn't perform very well precedent years.
+- Your team cannot cost more than 225 credits. Although you can technically keep it much lower than that - you could take a team of 30 riders costing 3 each - it seems a good idea to aim for 225 credits and spend as much as you can.
+- There is a special category of riders called *Top Ligue* - *top league* in English. For the 2023 edition, 9 riders lie in this category: [Tadej POGACAR](https://www.procyclingstats.com/rider/tadej-pogacar), [Wout VAN AERT](https://www.procyclingstats.com/rider/wout-van-aert/start), [Remco EVENEPOEL](https://www.procyclingstats.com/rider/remco-evenepoel/start), [Primoz ROGLIC](https://www.procyclingstats.com/rider/primoz-roglic/start), [Jonas VINGEGAARD](https://www.procyclingstats.com/rider/jonas-vingegaard-rasmussen/start), [Julian ALAPHILIPPE](https://www.procyclingstats.com/rider/julian-alaphilippe/start), [Mathieu VAN DER POEL](https://www.procyclingstats.com/rider/mathieu-van-der-poel/start), [Jasper PHILIPSEN](https://www.procyclingstats.com/rider/jasper-philipsen/start), [Aleksander VLASOV](https://www.procyclingstats.com/rider/aleksandr-vlasov/start). They are cycling superstars. You do not have to pick superstars necessarily, but at the same time, you cannot spend more than 63 credits in this category.
+
+Then, riders will score points everytime they perform well in a race. The more prestigious the race, the more points riders can get. Similarly, more riders will be awarded points in a [Grand Tour](https://en.wikipedia.org/wiki/Grand_Tour_(cycling)) or a [Monument](https://en.wikipedia.org/wiki/Cycling_monument) than in a continental race at [.1 level](https://en.wikipedia.org/wiki/UCI_race_classifications).
+
+Season 23' is well under way. Based on past years, can we have an idea of what has proven to be the best strategies - and by what margin the oracle would have won each season?
+
+# Knapsack problem
+
+So, to summarize, our problem can be formulated as follow:
+
+- Given a total number of credit of 225,
+- And a constraint on the number of team members which has to be between 30 to 35
+
+How can we maximize the number of points collected at the end of the year?
+
+I'm not very familiar with classical optimization problems, but it turns out that this is exactly the formulation of a Knapsack problem. The original formulation goes as follow:
+
+> Given a set of items, each with a weight and a value, determine which items to include in the collection so that the total weight is less than or equal to a given limit and the total value is as large as possible.
+
+Replace the collection by your squad, an item by a rider, the weight by the cotation of the rider, and the value by the total of points scored at the end of the season, and you almost got your Rivals' challenge! We'll have to add the two constraints over the 'top league' riders and the fact that the total number of riders is constrained too.
+
+# Collecting data
+
+Let's begin by grabbing some data for our experiment. The rivals manager website is quite old and is not necessarily at the state of the art, and there is no API available to perform the request. So let's do a little bit of web scrapping. We'll use [rvest](https://rvest.tidyverse.org/) to do so. We'll also use [dplyr](https://dplyr.tidyverse.org/) and [tidyr](https://tidyr.tidyverse.org/) as utility packages for data handling, and [purrr](https://purrr.tidyverse.org/) for functional oriented programming functions.
+
+```{r}
+#| label: loading-packages
+#| include: false
+#| message: false
+# loading rvest, dplyr, purrr, tidyr
+library(rvest)
+library(dplyr)
+library(purrr)
+library(tidyr)
+# lpSolve for LP
+library(lpSolve)
+
+```
+
+First function to read the riders' results.
+
+```{r}
+#| label: fun-read_results
+#| code-summary: Scrap web page for riders' results
+
+#' read results table from rivals manager website
+#' 
+#' @param year Year of interest
+read_riders_results <- function(year) {
+  url <- paste0("http://velo-club.com/historique.php?choix=Classement&annee=", year)
+  read_html(url) |>
+    html_element("table") |>
+    html_table() |>
+    select(-Pays, -Place) |>
+    rename(Name = Nom, Cost = Valeurs)
+}
+```
+
+Second function to read the riders' original cotations. It's a bit redundant but riders who didn't score any point have to be found in this table as they do not appear in the yearly results tables above (only riders with at least 1 point do).
+
+```{r}
+#| label: fun-read_values
+#| code-summary: Scrap riders' cotation
+
+#' read values table from rivals manager website
+#' 
+#' @param year Year of interest
+read_riders_values <- function(year) {
+  url <- paste0("http://velo-club.com/historique.php?choix=Cotation&annee=", year)
+  read_html(url) |>
+    html_element("table") |>
+    html_table() |>
+    select(-Pays) |>
+    rename(Name = Nom, Team = Equipe, Cost = Valeurs)
+}
+```
+
+Third function is necessary to grab actual results from human players:
+
+```{r}
+#| label: fun-read_team_score
+#| code-summary: Collect human performances
+
+#' read scores from human players
+#' 
+#' @param year Year of interest
+read_team_scores <- function(year) {
+  url <- paste0("http://velo-club.com/historique.php?choix=Classement&annee=",
+                year,
+                "&lstClassement=Managers")
+  read_html(url) |>
+    html_element("table") |>
+    html_table() |>
+    select(-Pays, -Place) |>
+    rename(Name = Nom)
+}
+```
+
+Let's now request the data for the period 2013-2022 for which we have historical data. We'll join the results and the values table to make sure we have all the riders available at the beginning of every season.
+
+
+```{r}
+#| label: collect_data
+#| cache: true
+#| code-summary: Bind riders data for each year altogether
+
+map(2013:2022, function(x) {
+  riders_results <- read_riders_results(x)
+  riders_values <- read_riders_values(x)
+  left_join(riders_values, riders_results, by = c("Name", "Cost"))
+}) |> setNames(2013:2022) |> 
+  bind_rows(.id = "Year") -> data_riders
+```
+
+Let's make sure we flag properly the 'top league' for every year in the history. Sadly, it is hard to find valid info about who was in the top ligue in the past. I tried to collect all the infortion I could on the [forum](https://forum.velo-club.net/), but it's not easy to find. I think I managed to find every member of the top league, but couldn't find the maximum cost for top league riders you were able to pick for years 2013, and 2015 to 2019. There was no constraint at all in 2020. Since it seems the cotation strategy was the same for the 2013-2019 period, I'll make the hypothesis that the limit for top league riders was identical to the one for the year 2014, i.e. 93. 
+
+```{r}
+#| label: flag-top-league
+#| code-summary: Add Top League and compute performance ratio (Points over Cost) 
+
+top_league <- list(
+  "2013" = c("Joaquin RODRIGUEZ", "Alberto CONTADOR", "Philippe GILBERT", 
+             "Peter SAGAN", "Bradley WIGGINS", "Vincenzo NIBALI", "Alejandro VALVERDE", 
+             "Edvald BOASSON HAGEN", "Cadel EVANS", "Samuel SANCHEZ", "Tom BOONEN", 
+             "Fabian CANCELLARA", "Chris FROOME", "Thomas VOECKLER", "John DEGENKOLB", 
+             "Andre GREIPEL", "Andy SCHLECK", "Mark CAVENDISH", "Rui Alberto COSTA", 
+             "Simon GERRANS", "Robert GESINK", "Ryder HESJEDAL", "Tony MARTIN", 
+             "Rigoberto URAN"),
+  "2014" = c("Peter SAGAN", "Alejandro VALVERDE", "Joaquin RODRIGUEZ", "Chris FROOME", 
+             "Vincenzo NIBALI", "Alberto CONTADOR", "Rui Alberto COSTA", "Nairo QUINTANA", 
+             "Fabian CANCELLARA", "Philippe GILBERT", "Bauke MOLLEMA", "Mark CAVENDISH", 
+             "Greg VAN AVERMAET", "Edvald BOASSON HAGEN", "John DEGENKOLB", 
+             "Sylvain CHAVANEL", "Andre GREIPEL", "Sergio HENAO", "Daniel MORENO", 
+             "Richie PORTE", "Bradley WIGGINS"),
+  "2015" = c("Alejandro VALVERDE", "Peter SAGAN", "Alberto CONTADOR", "Vincenzo NIBALI", 
+             "Chris FROOME", "Joaquin RODRIGUEZ", "John DEGENKOLB", "Alexander KRISTOFF", 
+             "Michal KWIATKOWSKI", "Nairo QUINTANA", "Rui Alberto COSTA", 
+             "Fabian CANCELLARA", "Philippe GILBERT", "Greg VAN AVERMAET", 
+             "Bauke MOLLEMA", "Simon GERRANS", "Romain BARDET", "Nacer BOUHANNI", 
+             "Arnaud DEMARE", "Daniel MARTIN", "Daniel MORENO", "Tejay VAN GARDEREN"),
+  "2016" = c("Alejandro VALVERDE", "Alexander KRISTOFF", "Peter SAGAN", 
+             "Chris FROOME", "Alberto CONTADOR", "Vincenzo NIBALI", "Nairo QUINTANA", 
+             "Greg VAN AVERMAET", "Joaquin RODRIGUEZ", "John DEGENKOLB", "Fabio ARU", 
+             "Michal KWIATKOWSKI", "Thibaut PINOT", "Rui Alberto COSTA", "Philippe GILBERT", 
+             "Romain BARDET", "Tom DUMOULIN", "Tony GALLOPIN", "Michael MATTHEWS", 
+             "Andre GREIPEL", "Bauke MOLLEMA", "Daniel MORENO"),
+  "2017" = c("Peter SAGAN", "Alejandro VALVERDE", "Alexander KRISTOFF", 
+             "Greg VAN AVERMAET", "Chris FROOME", "Nairo QUINTANA", "Alberto CONTADOR", 
+             "Romain BARDET", "Vincenzo NIBALI", "Michael MATTHEWS", "Thibaut PINOT", 
+             "Julian ALAPHILIPPE", "Fabio ARU", "Jhoan Esteban CHAVES", "Rui Alberto COSTA", 
+             "Tom DUMOULIN", "Giacomo NIZZOLO", "Nacer BOUHANNI", "John DEGENKOLB", 
+             "Bauke MOLLEMA", "Diego ULISSI", "Edvald BOASSON HAGEN", "Richie PORTE"),
+  "2018" = c("Peter SAGAN", "Greg VAN AVERMAET", "Chris FROOME", "Alejandro VALVERDE", 
+             "Alexander KRISTOFF", "Nairo QUINTANA", "Tom DUMOULIN", "Michael MATTHEWS", 
+             "Vincenzo NIBALI", "Thibaut PINOT", "Romain BARDET", "Michal KWIATKOWSKI", 
+             "Julian ALAPHILIPPE", "Fabio ARU", "Daniel MARTIN", "Nacer BOUHANNI", 
+             "Arnaud DEMARE", "Philippe GILBERT", "Rigoberto URAN", "Sonny COLBRELLI", 
+             "Andre GREIPEL", "Richie PORTE", "Diego ULISSI", "Ilnur ZAKARIN"),
+  "2019" = c("Peter SAGAN", "Alejandro VALVERDE", "Greg VAN AVERMAET", "Julian ALAPHILIPPE", 
+             "Chris FROOME", "Tom DUMOULIN", "Elia VIVIANI", "Alexander KRISTOFF", 
+             "Michael MATTHEWS", "Thibaut PINOT", "Simon YATES", "Romain BARDET", 
+             "Nairo QUINTANA", "Primoz ROGLIC", "Arnaud DEMARE", "Michal KWIATKOWSKI", 
+             "Geraint THOMAS", "Tim WELLENS", "Jasper STUYVEN", "Sonny COLBRELLI", 
+             "Ion IZAGIRRE", "Miguel Angel LOPEZ", "Philippe GILBERT", "Daniel MARTIN", 
+             "Vincenzo NIBALI"),
+  "2020" = c("Julian ALAPHILIPPE", "Primoz ROGLIC", "Alejandro VALVERDE",
+             "Peter SAGAN", "Greg VAN AVERMAET", "Egan BERNAL", "Jakob FUGLSANG", "Elia VIVIANI",      
+             "Alexander KRISTOFF","Matteo TRENTIN",    
+             "Thibaut PINOT", "Pascal ACKERMANN", "Michael MATTHEWS",  
+             "Oliver NAESEN", "Tim WELLENS", "Tom DUMOULIN", "Miguel Angel LOPEZ", "Bauke MOLLEMA",     
+             "Mathieu VAN DER POEL", "Adam YATES"),
+  "2021" = c("Primoz ROGLIC", "Julian ALAPHILIPPE", "Tadej POGACAR", "Wout VAN AERT",
+             "Mathieu VAN DER POEL", "Egan BERNAL", "Remco EVENEPOEL", "Peter SAGAN"),
+  "2022" = c("Tadej POGACAR", "Wout VAN AERT", "Primoz ROGLIC", "Julian ALAPHILIPPE",
+             "Mathieu VAN DER POEL", "Egan BERNAL", "Sonny COLBRELLI", "Joao ALMEIDA", "Remco EVENEPOEL", "Adam YATES")
+)
+
+max_top_league <- c(`2013` = 93, `2014` = 93, `2015` = 93, `2016` = 93, `2017` = 93, 
+                    `2018` = 93, `2019` = 93, `2020` = 225, `2021` = 65, `2022` = 63
+)
+
+
+# transform top-league data into a df
+map2_vec(top_league, names(top_league),
+         ~list(mutate(tibble(Name = .x), Year = .y, TopLeague = TRUE))) |> 
+  bind_rows() |> 
+  right_join(data_riders, by = c("Name", "Year")) |> 
+  replace_na(list(TopLeague = FALSE)) |> 
+  arrange(Year, desc(Cost)) |> 
+  mutate(Ratio = round(Points/Cost, 2L)) -> data_riders
+```
+
+We now have a single data.frame will all the scores for every rider over the 2013 to 2022 period, and the information about the top ligue and the constraints which apply to it.
+
+
+
+```{r}
+#| include: false
+
+# for tables
+library(reactable)
+library(crosstalk)
+```
+
+
+```{r}
+#| label: full-data-rdy
+#| echo: false
+
+topleague_format <- function(value) {
+  # dash for false, checkmark for true
+  if (!value) "  \u2013  " else "\u2713"
+}
+
+topleague_column <- function(maxWidth = 55, ...) {
+  colDef(cell = topleague_format, maxWidth = maxWidth, align = "center", class = "cell number", ...)
+}
+
+reactable(rename(data_riders, Top = TopLeague), 
+          searchable = TRUE,
+          columns = list(
+            Top = topleague_column()
+          ))
+```
+
+
+# Human performances
+
+Similarly, we can retrieve all the results for any player over the same period. Let's display the podium for each year.
+
+```{r}
+#| label: player_score
+#| cache: true
+#| code-summary: Bind human data for each year altogether
+
+map(2013:2022, read_team_scores) |>
+  setNames(2013:2022) |> 
+  bind_rows(.id = "Year") |> 
+  group_by(Year) |> 
+  slice_max(Points, n = 3) |> 
+  mutate(Ratio = round(Points/225, 2L))-> data_teams
+```
+
+We can observe several changes in the performance scores. Several phenomenom are at stake here. Firstly, rules have changed in the way the game was played. There were more riders in the top league category and even if the budget allowed was more important, it had an impact on the way teams were made. Secondly, 2020 was different because of covid. Thirdly, some riders have become easily predictable lastly, whith Tadej Pogacar or Wout Van Aert (and a few others) being extremly dominant. It doesn't mean that they will necessarily be in the top teams, but they are somehow safe picks as they will win a lot of rewarding races all year long.  
+
+
+```{r}
+#| label: plot-podium-rivals
+#| fig-width: 8
+#| fig-height: 6
+#| fig-dpi: 700
+#| fig-align: center
+library(ggplot2)
+library(emojifont)
+
+tmp_plt <- data_teams |> 
+  group_by(Year) |> 
+  arrange(desc(Points)) |> 
+  mutate(Rank = fontawesome('fa-trophy'),
+         color = c("#FFD700", "#C0C0C0", "#CD7F32"),
+         Year = as.numeric(Year)) |> 
+  ungroup()
+
+ggplot(tmp_plt, aes(x = Year, y = Points, label = Rank, color = color)) +
+  geom_text(family='fontawesome-webfont', size=12) +
+  scale_color_manual(values=c("#C0C0C0", "#CD7F32", "#FFD700")) +
+  scale_x_continuous(breaks = 2013:2022) +
+  theme(legend.position='none',
+        plot.title = element_text(size = 30),
+        plot.subtitle = element_text(size = 20),
+        axis.text.y = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.title.x = element_text(size = 20),
+        axis.text.x = element_text(size = 20)
+  ) +
+  ggtitle("Points for podium from 2013 to 2022")
+```
+
+
+
+# Best team: Oracle
+
+Now, let's try to find what could have been the best team, the one we would have chosen if we were an oracle. We will use the year 2022 as the first example. One way to solve this problem is by using linear programming. The idea is to represent the problem as a value to be maximize will respecting the different constraints. One way to do it in R is to use the [lpSolve package](https://cran.r-project.org/web/packages/lpSolve/index.html) which is an interface to the free and open source solver [lpSolve](https://lpsolve.sourceforge.net/5.5/).
+
+We can now specify our LP problem. We want to maximize the value of our team, i.e:
+
+$$
+\max \sum_{i=1}^N x_i\cdot\mathrm{Points}_i
+$$
+where $N$ is the number of riders in the game, $x_i$ a binary variable (1 or 0) wether rider $i$ is included in the team or not, and $\mathrm{Points}_i$ the total of points for rider $i$ at the end of the season. We have to respect the following contraints :
+
+$$
+s.t. \sum_i x_i \leq 35
+$$
+$$
+\sum_i x_i \geq 30
+$$
+
+$$
+\sum_i x_i\cdot\mathrm{Cost}_i \leq 225
+$$
+
+and 
+
+$$
+\sum_i x_i\cdot\mathrm{TopLeague}_i\cdot\mathrm{Cost}_i \leq \mathrm{MaxTopLeague}
+$$
+where $Cost_i$ is the cost of the rider $i$, $TopLeague_i$ indicates if the rider $i$ is in the top league category and MaxTopLeague is a constant value for every year.
+
+Now, we can specify our LP problem. Let's solve the problem for the whole period now. Let's build a `maximize_score` function to easily compute the scores for each year.
+
+```{r}
+#| label: optim-all-years
+#| code-summary: Function to find the optimal team
+
+
+#' @param data A df with columns Name, Cost, Points, TopLeague
+#' @param max_top_league Maximum budget for top league riders
+#' @return A dataframe, with one row corresponding to one rider from the best team.
+maximize_score <- function(data, max_top_league) {
+  # define obj function
+  # this corresponds to maximizing the sum of points 
+  f.obj <- data[["Points"]]
+  
+  N <- nrow(data)
+  # define constraints
+  # 1st and 2nd constraints concern all x_i
+  # 3rd constraints is for cost constraint
+  # 4th is about cost constraint for top league
+  f.con <- matrix(c(rep(1, N),
+                    rep(1, N),
+                    data[["Cost"]],
+                    data[["TopLeague"]]),
+                  nrow = 4, byrow = TRUE)
+  
+  # Inequality signs for constraints
+  f.dir <- c("<=",
+             ">=",
+             "<=",
+             "<=")
+  
+  # Threshold values for constraints (rhs)
+  f.rhs <- c(35,
+             30,
+             225,
+             max_top_league)
+  
+  # Problem definition
+  linprog <- lp(direction = "max",
+                f.obj,
+                f.con,
+                f.dir, 
+                f.rhs,
+                binary.vec = 1:length(f.obj))
+  
+  # We return as a result the dataframe's rows corresponding to
+  # riders in the best team possible
+  result <- data[as.logical(linprog$solution), ]
+  return(list(result))
+}
+```
+
+And let's iterate over the years.
+
+```{r}
+#| label: lp_all_years
+#| code-summary: Iteration on 2013 to 2022 period
+
+# we use purrr::map2_vec() to iterate simultaneously on the data
+# and on the max value for top league
+data_nested <- data_riders |> nest(.by = Year)
+results_all_years <- map2_vec(
+  data_nested$data, max_top_league,
+  .f = maximize_score) |> 
+  setNames(2013:2022)
+```
+
+
+```{r}
+#| label: display-results-all-years
+#| code-summary: Best teams for 2013 to 2022 period - Table display
+
+df_results <- bind_rows(results_all_years, .id = "Year") |> 
+  rename(Top = TopLeague)
+shared_results <- SharedData$new(df_results)
+bscols(widths = c(2L, 10L),
+       filter_select(id = "year", "Year", shared_results, ~Year, multiple = FALSE),
+       reactable(shared_results, 
+                 pagination = TRUE,
+                 pageSizeOptions = 35,
+                 defaultPageSize = 35,
+                 compact = TRUE,
+                 defaultColDef = colDef(
+                   vAlign = "center",
+                   headerVAlign = "bottom",
+                   class = "cell",
+                   headerClass = "header"
+                 ),
+                 columns = list(
+                   Year = colDef(width = 75),
+                   Name = colDef(width = 200),
+                   Top = topleague_column(),
+                   Team = colDef(width = 60),
+                   Cost = colDef(width = 60)
+                 ))
+)
+```
+
+Let's compare how well human did compared to the best teams.
+
+```{r}
+#| label: human-vs-best
+#| code-summary: Human vs best team
+
+data_teams |> 
+  group_by(Year) |> 
+  mutate(Rank = c("First", "Second", "Third")) |> 
+  select(Year, Rank, Points) |> 
+  pivot_wider(names_from = Rank, values_from = Points) -> tmp
+
+df_results |> 
+  group_by(Year) |> 
+  summarize(Score = sum(Points)) |> 
+  left_join(tmp, by = "Year") |> 
+  mutate(`Difference with best` = Score - First) |> 
+  reactable()
+```
+
+
+
+# Conclusion
+
+Whoever plays that kind of game is always full of regrets. Why didn't I pick this rider instead of this one? Why did I trust him, again? The good news is, there are a lot of possible teams better than the best human player, so hope is still there for you !
+
+

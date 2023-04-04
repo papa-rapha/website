@@ -1,0 +1,19 @@
+---
+title: "Welcome To My Blog ! 'R avancé & introduction à Git'"
+author: "Raphaël"
+date: "2023-03-24"
+categories: [news, teaching]
+knitr:
+  opts_chunk: 
+    echo: true
+format:
+    html:
+        code-block-bg: false
+---
+
+This is the first post of this blog. Welcome !
+
+I've been pleased to teach a R course at the university of Nantes this winter untitled 'R avancé & introduction à Git'. You will be able to find the course materials [there](https://rnedellec-r-advanced-git.netlify.app/).
+The lesson is in French. It was a good exercise to build the materials from scratch, with the help of the awesome resources from posit team, such as [R advanced](https://adv-r.hadley.nz/) or [R packages](https://r-pkgs.org/). I got heavily inspired by [Andrew Heiss](https://www.andrewheiss.com/teaching/) teaching material to organize the class content online. Hopefully, I'll have time to improve and personalize the styling for next year.
+
+The final report goal was to build a personal blogging website, using CI-CD, github and reproducible science tools from the R environment to write articles efficiently. I had to do it myself, so here I am.
