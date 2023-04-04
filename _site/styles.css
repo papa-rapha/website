@@ -1,0 +1,68 @@
+/* css styles */
+
+body {
+    font-family: sans-serif;
+    background-color: #121212;
+}
+
+.navbar-dark {
+    background-color: #121212;
+}
+
+.navbar-title,
+li.nav-item span,
+.quarto-title,
+.quarto-title-meta,
+.quarto-listing-category,
+.quarto-listing-category-title,
+div.quarto-about-trestles .about-entity .about-link,
+.content a,
+#toc-title {
+    color: #5ea666;
+}
+
+#quarto-content,
+.quarto-title-block,
+.quarto-title-banner,
+#quarto-sidebar {
+    background-color: #121212;
+}
+
+.table.quarto-listing-table th,
+.table.quarto-listing-table td,
+.table.quarto-listing-table a {
+    color: #5ea666;
+    border-color: #5ea666;
+}
+
+#quarto-content {
+    color: rgb(231, 227, 221);
+}
+
+pre.sourceCode {
+    background-color: #e5f1e6;
+    border-left-style: none;
+    border-left: 0;
+    border-radius: 0;
+}
+
+.cell {
+    border-color: #5ea666;
+    border-width: 2px;
+    border-style: solid;
+    background-color: #e5f1e6;
+    border-radius: 0.25rem;
+    margin-bottom: 1em;
+}
+
+div.sourceCode {
+    margin-left: 0;
+}
+
+.blockquote p {
+    color: #a9aca9;
+}
+
+.nav-link a {
+    color: #a9aca9;
+}
