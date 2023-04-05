@@ -1,5 +1,5 @@
 ---
-title: "What was the best Rivals manager team possible? A knapsack problem."
+title: "What was the best Rivals manager team possible? A Knapsack problem."
 author: "Raphaël Nedellec"
 date: "2023-04-05"
 categories: [cycling, R, web-scraping, optimization]
@@ -65,7 +65,6 @@ library(purrr)
 library(tidyr)
 # lpSolve for LP
 library(lpSolve)
-
 ```
 
 First function to read the riders' results.
@@ -227,10 +226,8 @@ We now have a single data.frame will all the scores for every rider over the 201
 
 ```{r}
 #| include: false
-
 # for tables
 library(reactable)
-library(crosstalk)
 ```
 
 
@@ -250,7 +247,8 @@ topleague_column <- function(maxWidth = 55, ...) {
 reactable(rename(data_riders, Top = TopLeague), 
           searchable = TRUE,
           columns = list(
-            Top = topleague_column()
+            Top = topleague_column(),
+            Name = colDef(width=200)
           ))
 ```
 
@@ -391,7 +389,7 @@ maximize_score <- function(data, max_top_league) {
 }
 ```
 
-And let's iterate over the years.
+And let's iterate over the years. Here are all the best teams for the 2013 to 2022 period.
 
 ```{r}
 #| label: lp_all_years
@@ -404,19 +402,11 @@ results_all_years <- map2_vec(
   data_nested$data, max_top_league,
   .f = maximize_score) |> 
   setNames(2013:2022)
-```
 
-
-::: {.panel-tabset}
-
-```{r}
-#| label: display-results-multiple-tabs
-#| echo: false
 df_results <- bind_rows(results_all_years, .id = "Year") |> 
   rename(Top = TopLeague)
 
-print(df_results)
-
+# function for table formatting
 best_team_table <- function(data, year) {
   reactable(filter(df_results, Year=={{year}}) |> select(-Year),
             pagination=FALSE, compact=TRUE,
@@ -426,6 +416,7 @@ best_team_table <- function(data, year) {
             ))
 }
 
+# we must define tabsets programmaticaly
 template <- c(
   "## {{year}}\n",
   "```{r, echo = FALSE}\n",
@@ -439,6 +430,9 @@ yearly_tables <- lapply(
   function(year) knitr::knit_expand(text = template)
 )
 ```
+
+
+::: {.panel-tabset}
 
 `r knitr::knit(text = unlist(yearly_tables))`
 
@@ -468,7 +462,7 @@ df_results |>
 
 # Conclusion
 
-Whoever plays that kind of game is always full of regrets. Why didn't I pick this rider instead of this one? Why did I trust him, again? The good news is, there are a lot of possible teams better than the best human player, so hope is still there for you !
+Whoever plays that kind of game is always full of regrets. Why didn't I pick this rider instead of this one? Why did I trust him, again? The good news is, there are a lot of possible teams better than the best human player, so hope is still there for you!
 
 
 # Session Info {.appendix}
