@@ -9,6 +9,8 @@ knitr:
 format:
     html:
         code-block-bg: false
+        citation: false
+        license: ""
 ---
 
 This is the first post of this blog. Welcome !

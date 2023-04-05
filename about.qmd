@@ -13,7 +13,7 @@ about:
 
 ---
 
-This is an attempt at blogging - a lil' bit, about everything and nothing, but mostly stats, R and Python. 
+This is an attempt at blogging - a lil' bit, about everything and nothing, but mostly stats, R and Python, applied to any topic I may deem interesting.
 
 After 7 years at [EDF R&D](https://www.edf.fr/en/the-edf-group/inventing-the-future-of-energy/r-d-global-expertise) as a research engineer in data science, specialized in forecasting for energy markets and energy networks, I joined [Talend](https://www.talend.com/) as a lead data scientist to develop ML tools and features in Talend's product. I'm about to join a new company and start a new position. Stay tuned.
 

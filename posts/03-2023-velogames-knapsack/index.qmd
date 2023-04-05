@@ -1,7 +1,7 @@
 ---
 title: "What was the best Rivals manager team possible? A knapsack problem."
-author: "Raphaël"
-date: "2023-03-30"
+author: "Raphaël Nedellec"
+date: "2023-04-05"
 categories: [cycling, R, web-scraping, optimization]
 knitr:
   opts_chunk: 
@@ -9,9 +9,18 @@ knitr:
 format:
   html:
     toc: true
-    self-contained: true
     code-fold: true
+    self-contained: true
 ---
+
+```{r}
+#| echo: false
+#| results: 'hide'
+long_slug <- "03-2023-velogames-knapsack"
+# NOTE: after finishing post, run renv::snapshot() and copy the renv.lock file 
+# from the project root into the post directory
+renv::use(lockfile = "renv.lock")
+```
 
 # Rivals manager: introduction
 
@@ -398,35 +407,42 @@ results_all_years <- map2_vec(
 ```
 
 
-```{r}
-#| label: display-results-all-years
-#| code-summary: Best teams for 2013 to 2022 period - Table display
+::: {.panel-tabset}
 
+```{r}
+#| label: display-results-multiple-tabs
+#| echo: false
 df_results <- bind_rows(results_all_years, .id = "Year") |> 
   rename(Top = TopLeague)
-shared_results <- SharedData$new(df_results)
-bscols(widths = c(2L, 10L),
-       filter_select(id = "year", "Year", shared_results, ~Year, multiple = FALSE),
-       reactable(shared_results, 
-                 pagination = TRUE,
-                 pageSizeOptions = 35,
-                 defaultPageSize = 35,
-                 compact = TRUE,
-                 defaultColDef = colDef(
-                   vAlign = "center",
-                   headerVAlign = "bottom",
-                   class = "cell",
-                   headerClass = "header"
-                 ),
-                 columns = list(
-                   Year = colDef(width = 75),
-                   Name = colDef(width = 200),
-                   Top = topleague_column(),
-                   Team = colDef(width = 60),
-                   Cost = colDef(width = 60)
-                 ))
+
+print(df_results)
+
+best_team_table <- function(data, year) {
+  reactable(filter(df_results, Year=={{year}}) |> select(-Year),
+            pagination=FALSE, compact=TRUE,
+            columns = list(
+              Top = topleague_column(),
+              Name = colDef(width=200)
+            ))
+}
+
+template <- c(
+  "## {{year}}\n",
+  "```{r, echo = FALSE}\n",
+  "best_team_table(df_results, {{year}})\n",
+  "```\n",
+  "\n"
+)
+
+yearly_tables <- lapply(
+  unique(df_results$Year), 
+  function(year) knitr::knit_expand(text = template)
 )
 ```
+
+`r knitr::knit(text = unlist(yearly_tables))`
+
+:::
 
 Let's compare how well human did compared to the best teams.
 
@@ -455,3 +471,35 @@ df_results |>
 Whoever plays that kind of game is always full of regrets. Why didn't I pick this rider instead of this one? Why did I trust him, again? The good news is, there are a lot of possible teams better than the best human player, so hope is still there for you !
 
 
+# Session Info {.appendix}
+
+```{r}
+#| label: appendix
+#| echo: false
+source("../../R/appendix.R")
+insert_appendix(
+  repo_spec = "papa-rapha/website", 
+  name = long_slug
+)
+```
+
+<details><summary>Toggle</summary>
+
+```{r}
+#| echo: false
+library(sessioninfo)
+# save the session info as an object
+pkg_session <- session_info(pkgs = "attached")
+# get the quarto version
+quarto_version <- system("quarto --version", intern = TRUE)
+# inject the quarto info
+pkg_session$platform$quarto <- paste(
+  system("quarto --version", intern = TRUE), 
+  "@", 
+  quarto::quarto_path()
+)
+# print it out
+pkg_session
+```
+
+</details>

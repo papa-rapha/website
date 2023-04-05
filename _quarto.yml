@@ -3,17 +3,19 @@ project:
   output-dir: docs
 
 website:
-  title: "Raphaël"
-  site-url: ""
-  repo-url: ""
+  title: "papa rapha"
+  site-url: "https://papa-rapha.github.io/website"
+  repo-url: "https://github.com/papa-rapha/website"
   repo-actions: issue
   navbar:
+    title: "PAPA<span class='icon-line'></span>RAPHA" 
     right:
       - text: "About"
         href: about.qmd
 
 format:
   html:
+    css: styles.css
     code-block-border-left: true
     smooth-scroll: true
     link-external-newwindow: true

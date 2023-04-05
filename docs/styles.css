@@ -1,0 +1,25 @@
+.navbar-title:hover>.icon-line {
+    animation-duration: 600ms;
+    animation-name: line-expand;
+}
+
+@keyframes line-expand {
+    from {
+        width: 0%;
+    }
+
+    to {
+        width: 100%;
+    }
+}
+
+.icon-line {
+    display: block;
+    background: rgb(255, 255, 255);
+    width: 100%;
+    height: 6px;
+    margin: auto;
+    display: table;
+    margin-top: -6px;
+    margin-bottom: -6px;
+}
