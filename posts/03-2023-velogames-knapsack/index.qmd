@@ -24,12 +24,12 @@ renv::use(lockfile = "renv.lock")
 
 # Rivals manager: introduction
 
-I've been playing at [Rivals manager](http://velo-club.com/general.php) for a while. It's a fantasy cycling game rolling all over the season. The principle is simple, you select a team of 30 to 35 riders before the beginning of the season, and they will score points riding and performing during the cycling road season, from January to October. There are a few constraint though:
+I've been playing at [Rivals manager](http://velo-club.com/general.php) for a while. It's a fantasy cycling game rolling all over the season. The principle is simple, you select a team of 30 to 35 riders before the beginning of the season, and they will score points riding and performing during the cycling road season, from January to October. There are a few constraints though:
 
 - Riders all have a cotation. Cheaper riders cost 3 credits, while the most expensive riders cost around 35-38 credits depending on their performances during past seasons.
 - Your team has to have between 30 to 35 riders. You have to find a balance between expensive and already accomplished riders and young guns or lesser known riders who didn't perform very well precedent years.
 - Your team cannot cost more than 225 credits. Although you can technically keep it much lower than that - you could take a team of 30 riders costing 3 each - it seems a good idea to aim for 225 credits and spend as much as you can.
-- There is a special category of riders called *Top Ligue* - *top league* in English. For the 2023 edition, 9 riders lie in this category: [Tadej POGACAR](https://www.procyclingstats.com/rider/tadej-pogacar), [Wout VAN AERT](https://www.procyclingstats.com/rider/wout-van-aert/start), [Remco EVENEPOEL](https://www.procyclingstats.com/rider/remco-evenepoel/start), [Primoz ROGLIC](https://www.procyclingstats.com/rider/primoz-roglic/start), [Jonas VINGEGAARD](https://www.procyclingstats.com/rider/jonas-vingegaard-rasmussen/start), [Julian ALAPHILIPPE](https://www.procyclingstats.com/rider/julian-alaphilippe/start), [Mathieu VAN DER POEL](https://www.procyclingstats.com/rider/mathieu-van-der-poel/start), [Jasper PHILIPSEN](https://www.procyclingstats.com/rider/jasper-philipsen/start), [Aleksander VLASOV](https://www.procyclingstats.com/rider/aleksandr-vlasov/start). They are cycling superstars. You do not have to pick superstars necessarily, but at the same time, you cannot spend more than 63 credits in this category.
+- There is a special category of riders called *Top Ligue* - *top league* in English. For the 2023 edition, 9 riders lie in this category: [Tadej POGACAR](https://www.procyclingstats.com/rider/tadej-pogacar), [Wout VAN AERT](https://www.procyclingstats.com/rider/wout-van-aert/start), [Remco EVENEPOEL](https://www.procyclingstats.com/rider/remco-evenepoel/start), [Primoz ROGLIC](https://www.procyclingstats.com/rider/primoz-roglic/start), [Jonas VINGEGAARD](https://www.procyclingstats.com/rider/jonas-vingegaard-rasmussen/start), [Julian ALAPHILIPPE](https://www.procyclingstats.com/rider/julian-alaphilippe/start), [Mathieu VAN DER POEL](https://www.procyclingstats.com/rider/mathieu-van-der-poel/start), [Jasper PHILIPSEN](https://www.procyclingstats.com/rider/jasper-philipsen/start), [Aleksander VLASOV](https://www.procyclingstats.com/rider/aleksandr-vlasov/start). They are cycling superstars. You do not have to pick superstars necessarily, but at the same time, you cannot spend more than 63 credits in this category. This is the rule for the 2023 edition but the number of top league riders allowed or the cost constraint has changed from time to time.
 
 Then, riders will score points everytime they perform well in a race. The more prestigious the race, the more points riders can get. Similarly, more riders will be awarded points in a [Grand Tour](https://en.wikipedia.org/wiki/Grand_Tour_(cycling)) or a [Monument](https://en.wikipedia.org/wiki/Cycling_monument) than in a continental race at [.1 level](https://en.wikipedia.org/wiki/UCI_race_classifications).
 
@@ -41,6 +41,7 @@ So, to summarize, our problem can be formulated as follow:
 
 - Given a total number of credit of 225,
 - And a constraint on the number of team members which has to be between 30 to 35
+- With an extra constraint on the cost of the most expensive riders
 
 How can we maximize the number of points collected at the end of the year?
 
@@ -105,7 +106,7 @@ read_riders_values <- function(year) {
 }
 ```
 
-Third function is necessary to grab actual results from human players:
+Third function is necessary to grab actual results from human players.
 
 ```{r}
 #| label: fun-read_team_score
@@ -142,7 +143,7 @@ map(2013:2022, function(x) {
   bind_rows(.id = "Year") -> data_riders
 ```
 
-Let's make sure we flag properly the 'top league' for every year in the history. Sadly, it is hard to find valid info about who was in the top ligue in the past. I tried to collect all the infortion I could on the [forum](https://forum.velo-club.net/), but it's not easy to find. I think I managed to find every member of the top league, but couldn't find the maximum cost for top league riders you were able to pick for years 2013, and 2015 to 2019. There was no constraint at all in 2020. Since it seems the cotation strategy was the same for the 2013-2019 period, I'll make the hypothesis that the limit for top league riders was identical to the one for the year 2014, i.e. 93. 
+Let's make sure we flag properly the 'top league' for every year in the history. Sadly, it is hard to find valid info about who was in the top league in the past. I tried to collect all the information I could on the [forum](https://forum.velo-club.net/), but it's not easy to find. I think I managed to find every member of the top league, but couldn't find the maximum cost for top league riders you were able to pick for years 2013, and 2015 to 2019. There was no constraint at all in 2020. Since it seems the cotation strategy was the same for the 2013-2019 period, I'll make the hypothesis that the limit for top league riders was identical to the one for the year 2014, i.e. 93. 
 
 ```{r}
 #| label: flag-top-league
@@ -233,7 +234,7 @@ library(reactable)
 
 ```{r}
 #| label: full-data-rdy
-#| echo: false
+#| code-summary: "Table: scores and costs for every riders for 2013 to 2022"
 
 topleague_format <- function(value) {
   # dash for false, checkmark for true
@@ -279,6 +280,9 @@ We can observe several changes in the performance scores. Several phenomenom are
 #| fig-height: 6
 #| fig-dpi: 700
 #| fig-align: center
+#| code-summary: Plot for podium, from 2013 to 2022
+
+
 library(ggplot2)
 library(emojifont)
 
@@ -309,7 +313,7 @@ ggplot(tmp_plt, aes(x = Year, y = Points, label = Rank, color = color)) +
 
 # Best team: Oracle
 
-Now, let's try to find what could have been the best team, the one we would have chosen if we were an oracle. We will use the year 2022 as the first example. One way to solve this problem is by using linear programming. The idea is to represent the problem as a value to be maximize will respecting the different constraints. One way to do it in R is to use the [lpSolve package](https://cran.r-project.org/web/packages/lpSolve/index.html) which is an interface to the free and open source solver [lpSolve](https://lpsolve.sourceforge.net/5.5/).
+Now, let's try to find what could have been the best team, the one we would have chosen if we were an oracle. One way to solve this problem is by using linear programming. The idea is to represent the problem as a value to be maximized while respecting the different constraints. One way to do it in R is to use the [lpSolve package](https://cran.r-project.org/web/packages/lpSolve/index.html) which is an interface to the free and open source solver [lpSolve](https://lpsolve.sourceforge.net/5.5/).
 
 We can now specify our LP problem. We want to maximize the value of our team, i.e:
 
@@ -321,20 +325,23 @@ where $N$ is the number of riders in the game, $x_i$ a binary variable (1 or 0) 
 $$
 s.t. \sum_i x_i \leq 35
 $$
+the team must not exceed 35 riders, and
+
 $$
 \sum_i x_i \geq 30
 $$
+must at least have 30 riders at minimum, and
 
 $$
 \sum_i x_i\cdot\mathrm{Cost}_i \leq 225
 $$
 
-and 
+the total cost must not exceed 225, and 
 
 $$
 \sum_i x_i\cdot\mathrm{TopLeague}_i\cdot\mathrm{Cost}_i \leq \mathrm{MaxTopLeague}
 $$
-where $Cost_i$ is the cost of the rider $i$, $TopLeague_i$ indicates if the rider $i$ is in the top league category and MaxTopLeague is a constant value for every year.
+the 'top league' cost must not exceed a max value which changes every year. In the above equations, $Cost_i$ is the cost of the rider $i$, $TopLeague_i$ indicates if the rider $i$ is in the top league category and $\mathrm{MaxTopLeague}$ is a constant value for every year.
 
 Now, we can specify our LP problem. Let's solve the problem for the whole period now. Let's build a `maximize_score` function to easily compute the scores for each year.
 
