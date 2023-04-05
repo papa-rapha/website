@@ -1,3 +1,8 @@
+.navbar-dark,
+.quarto-title-banner {
+    background-color: #5a7db1;
+}
+
 .navbar-title:hover>.icon-line {
     animation-duration: 600ms;
     animation-name: line-expand;
