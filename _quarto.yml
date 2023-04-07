@@ -3,8 +3,9 @@ project:
   output-dir: docs
 
 website:
-  title: "RN"
+  title: "Raphaël N."
   site-url: "https://raphael-nedellec.github.io/website"
+  description: "Raphaël Nedellec's personal website"
   repo-url: "https://github.com/raphael-nedellec/website"
   repo-actions: issue
   navbar:
