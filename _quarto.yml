@@ -3,7 +3,7 @@ project:
   output-dir: docs
 
 website:
-  title: "papa rapha"
+  title: "RN"
   site-url: "https://raphael-nedellec.github.io/website"
   repo-url: "https://github.com/raphael-nedellec/website"
   repo-actions: issue
