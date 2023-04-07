@@ -2,7 +2,7 @@
 title: "What was the best Rivals manager team possible? A Knapsack problem."
 author: "Raphaël Nedellec"
 date: "2023-04-05"
-categories: [cycling, R, web-scraping, optimization]
+categories: [cycling, R, web-scraping, optimization, fantasy-cycling]
 knitr:
   opts_chunk: 
     echo: true

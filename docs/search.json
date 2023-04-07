@@ -4,21 +4,21 @@
     "href": "about.html",
     "title": "Raphaël",
     "section": "",
-    "text": "This is an attempt at blogging - a lil’ bit, about everything and nothing, but mostly stats, R and Python, applied to any topic I may deem interesting.\nAfter 7 years at EDF R&D as a research engineer in data science, specialized in forecasting for energy markets and energy networks, I joined Talend as a lead data scientist to develop ML tools and features in Talend’s product. I’m about to join a new company and start a new position. Stay tuned.\nI also enjoy teaching when I can. I did teach in the past at Ensai, CEPE, Dauphine University, Nantes Université."
+    "text": "After 7 years at EDF R&D as a research engineer in data science, specialized in forecasting for energy markets and energy networks, I joined Talend as a lead data scientist to develop ML tools and features in Talend’s product. I’m about to join a new company and start a new position. Stay tuned.\nI also enjoy teaching when I can. I did teach in the past at Ensai, CEPE, Dauphine University, Nantes Université."
   },
   {
     "objectID": "index.html",
     "href": "index.html",
     "title": "papa rapha",
     "section": "",
-    "text": "Date\n\n\nTitle\n\n\n\n\n\n\nApr 5, 2023\n\n\nWhat was the best Rivals manager team possible? A Knapsack problem.\n\n\n\n\nMar 24, 2023\n\n\nWelcome To My Blog ! ‘R avancé & introduction à Git’\n\n\n\n\n\n\nNo matching items"
+    "text": "Date\n\n\nTitle\n\n\n\n\n\n\nApr 28, 2023\n\n\nVelogames spring classics: how to optimize your riders’ choices and your transfers strategy?\n\n\n\n\nApr 5, 2023\n\n\nWhat was the best Rivals manager team possible? A Knapsack problem.\n\n\n\n\nMar 24, 2023\n\n\nWelcome To My Blog ! ‘R avancé & introduction à Git’\n\n\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "posts/03-2023-velogames-knapsack/index.html#last-updated",
     "href": "posts/03-2023-velogames-knapsack/index.html#last-updated",
     "title": "What was the best Rivals manager team possible? A Knapsack problem.",
     "section": "Last updated",
-    "text": "Last updated\n\n2023-04-05 13:17:13 CEST"
+    "text": "Last updated\n\n2023-04-06 10:34:32 CEST"
   },
   {
     "objectID": "posts/03-2023-velogames-knapsack/index.html#details",
@@ -33,5 +33,33 @@
     "title": "Welcome To My Blog ! ‘R avancé & introduction à Git’",
     "section": "",
     "text": "This is the first post of this blog. Welcome !\nI’ve been pleased to teach a R course at the university of Nantes this winter untitled ‘R avancé & introduction à Git’. You will be able to find the course materials there. The lesson is in French. It was a good exercise to build the materials from scratch, with the help of the awesome resources from posit team, such as R advanced or R packages. I got heavily inspired by Andrew Heiss teaching material to organize the class content online. Hopefully, I’ll have time to improve and personalize the styling for next year.\nThe final report goal was to build a personal blogging website, using CI-CD, github and reproducible science tools from the R environment to write articles efficiently. I had to do it myself, so here I am."
+  },
+  {
+    "objectID": "posts/04-2023-Velogames-springclassics/index.html#last-updated",
+    "href": "posts/04-2023-Velogames-springclassics/index.html#last-updated",
+    "title": "Velogames spring classics: how to optimize your riders’ choices and your transfers strategy?",
+    "section": "Last updated",
+    "text": "Last updated\n\n2023-04-07 10:01:24 CEST"
+  },
+  {
+    "objectID": "posts/04-2023-Velogames-springclassics/index.html#details",
+    "href": "posts/04-2023-Velogames-springclassics/index.html#details",
+    "title": "Velogames spring classics: how to optimize your riders’ choices and your transfers strategy?",
+    "section": "Details",
+    "text": "Details\n\nsource code, R environment"
+  },
+  {
+    "objectID": "posts/04-2023-Velogames-springclassics/index.html#without-transfers",
+    "href": "posts/04-2023-Velogames-springclassics/index.html#without-transfers",
+    "title": "Velogames spring classics: how to optimize your riders’ choices and your transfers strategy?",
+    "section": "Without transfers",
+    "text": "Without transfers\nSimilarly to the previous post about Rivals manager best team, it is possible to formulate this question as a linear programming problem. Let’s start with a simplified problem. What would have been the best team possible without any replacement - i.e. if you had kept the same team from MSR (Milano San remo) to LBL (Liège-Bastogne-Liège). In that case, the problem can be formulated as follow:\nMaximize the total number of points collected\n\\[\n\\max \\sum_{i=1}^N x_i\\cdot\\mathrm{Points}_i\n\\]\nwith a team of exactly 12 riders\n\\[\ns.t. \\sum_i x_i = 12\n\\]\nwith the team cost not exceeding 100 credits.\n\\[\n\\sum_i x_i\\cdot\\mathrm{Cost}_i \\leq 100\n\\]\n\n\nFunction to solve LP problem\nlibrary(lpSolve)\nmaximize_score_wo_transfers <- function(data) {\n  # define obj function\n  # this corresponds to maximizing the sum of points \n  f.obj <- data[[\"Overall\"]]\n  \n  N <- nrow(data)\n  # define constraints\n  # 1st and 2nd constraints concern all x_i\n  # 3rd constraints is for cost constraint\n  # 4th is about cost constraint for top league\n  f.con <- matrix(c(rep(1, N),\n                    data[[\"Cost\"]]),\n                  nrow = 2, byrow = TRUE)\n  \n  # Inequality signs for constraints\n  f.dir <- c(\"==\", \"<=\")\n  \n  # Threshold values for constraints (rhs)\n  f.rhs <- c(12, 100)\n  \n  # Problem definition\n  linprog <- lp(direction = \"max\",\n                f.obj,\n                f.con,\n                f.dir, \n                f.rhs,\n                binary.vec = 1:length(f.obj))\n  \n  # We return as a result the dataframe's rows corresponding to\n  # riders in the best team possible\n  result <- data[as.logical(linprog$solution), ]\n  return(result)\n}\n\n\n\n20212022\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nIn 2021, the best team without transfers would have scored 9374 points, and 11975 points in 2022. This means this strategy would have ranked 99th in 2021 and 26th in 2022. Not bad! Note that we have the same results than @CalumLonie, it’s a relief!\nIt seems quite obvious that with transfers, we could do much better. But, by how much?"
+  },
+  {
+    "objectID": "posts/04-2023-Velogames-springclassics/index.html#with-transfers",
+    "href": "posts/04-2023-Velogames-springclassics/index.html#with-transfers",
+    "title": "Velogames spring classics: how to optimize your riders’ choices and your transfers strategy?",
+    "section": "With transfers",
+    "text": "With transfers\n\nToy problem\nBefore trying to solve the problem at scale, let’s imagine a simpler problem with way less riders. Let’s think about a problem where we would have only 4 riders, and 3 races.\n\n\nToy table\ntribble(~Rider, ~Cost, ~Race_1, ~Race_2, ~Race_3,\n        \"A\", 40, 200, 100, 0,\n        \"B\", 50, 300, 0, 300,\n        \"C\", 60, 0, 300, 300,\n        \"D\", 40, 100, 150, 100) |> \n  reactable(columns = list(\n    Race_1 = colDef(name = \"Race 1\"),\n    Race_2 = colDef(name = \"Race 2\"),\n    Race_3 = colDef(name = \"Race 3\")\n  ))\n\n\n\n\n\n\n\nOur team must have exactly two riders, and we are allowed 2 transfers only. What is the best strategy to optimize score ? We can formulate our problem as follow:\n\\[\n\\max \\sum_{i=1}^4\\sum_{j=1}^3 x_{i,j}\\cdot\\mathrm{Points}_i\n\\]\nWe want to maximize the sum of points obtained (by Riders A, B, .., D during races 1, 2, 3) with the constraints:\n\\[\n\\begin{align*}\ns.t. & \\sum_{i=1}^4 x_{i, 1} = 2 \\\\\n& \\sum_{i=1}^4 x_{i, 2} = 2 \\\\\n& \\sum_{i=1}^4 x_{i, 3} = 2\n\\end{align*}\n\\]\nmeaning that for each race, we cannot have more than two riders in the team, and\n\\[\n\\begin{align*}\ns.t. & \\sum_{i=1}^4 x_{i, 1}\\cdot\\mathrm{Cost}_i <= 100 \\\\\n& \\sum_{i=1}^4 x_{i, 2}\\cdot\\mathrm{Cost}_i <= 100  \\\\\n& \\sum_{i=1}^4 x_{i, 3}\\cdot\\mathrm{Cost}_i <= 100  \n\\end{align*}\n\\]\nwe must still respect the constaint over the cost of our team. Also,\n\n\nFull problem\nLet’s change a little bit the problem formulation. Now, we are allowed to do 24 transfers.\n\n\nFunction to maximize score with transfers\nmaximize_score_w_transfers <- function(data) {\n  \n  tmp_data <- select(data, MSR:LBL)\n  N_riders <- nrow(tmp_data)\n  N_races  <- ncol(tmp_data)\n  \n  # define obj function\n  # this corresponds to maximizing the sum of points \n  # over all stage races\n  f.obj <- select(data, MSR:LBL) |> as.matrix() |> c()\n  \n  # for every race, we must have 12 riders \n  map(1:N_races, \\(x) {\n    vec <- integer(N_riders * N_races)\n    vec[1:N_riders + (x - 1) * N_riders] <- 1L\n    vec\n  }) -> race_nb_rider_constraint\n  \n  # for every race, cost cannot exceed 100\n  map(1:N_races, \\(x) {\n    vec <- integer(N_riders * N_races)\n    vec[1:N_riders + (x - 1) * N_riders] <- data[[\"Cost\"]]\n    vec\n  }) -> race_cost_rider_constraint\n  \n  # we cannot have more than 24 transfers\n  # since constraint must be linear, we must control that\n  # |x_{i,j} - x{i,j+1}| \n  \n  # Inequality signs for constraints\n  f.dir <- c(\"==\", \"<=\")\n  \n  # Threshold values for constraints (rhs)\n  f.rhs <- c(12, 100)\n  \n  # Problem definition\n  linprog <- lp(direction = \"max\",\n                f.obj,\n                f.con,\n                f.dir, \n                f.rhs,\n                binary.vec = 1:length(f.obj))\n  \n  # We return as a result the dataframe's rows corresponding to\n  # riders in the best team possible\n  result <- data[as.logical(linprog$solution), ]\n  return(result)\n}"
   }
 ]

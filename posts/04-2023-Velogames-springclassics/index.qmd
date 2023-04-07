@@ -1,0 +1,468 @@
+---
+title: "Velogames spring classics: how to optimize your riders' choices and your transfers strategy?"
+author: "Raphaël Nedellec"
+date: "2023-04-28"
+categories: [cycling, R, web-scraping, optimization, fantasy-cycling]
+knitr:
+  opts_chunk: 
+    echo: true
+format:
+  html:
+    toc: true
+    code-fold: true
+    self-contained: true
+---
+
+```{r}
+#| echo: false
+#| results: 'hide'
+long_slug <- "04-2023-Velogames-springclassics"
+# NOTE: after finishing post, run renv::snapshot() and copy the renv.lock file 
+# from the project root into the post directory
+renv::use(lockfile = "renv.lock")
+```
+
+# Velogames Spring Classics
+
+The [Velogames](https://www.velogames.com/) website is another site for cycling fan and fantasy games lovers. The site has been [up and running from 1997](https://www.velogames.com/about.php), and that's just simply amazing. Great job and congrats to its maintainer, George!  
+
+The competition offer is very rich nowadays. The [Six Superclasico](https://www.velogames.com/sixes-superclasico/2023/) competiton is up all year long covering the classics, and your task is to pick the best 6 man team for every race, while the [Women classics](https://www.velogames.com/womens-classics/2023/) is similar but focused on women professional cycling. You also have races for one-week and GT races belonging in the [Stage Race Championships](https://www.velogames.com/index_stage_season_2023.php) category. I'll probably write another article about eternal regrets on those races too, but for today, let's focus on the [Velogames Spring Classics](https://www.velogames.com/spring-classics/2023/)! Note that I'm not the only geek interested in this problem. [@jeremader](https://twitter.com/jeremader) and [@CalumLonie](https://twitter.com/CalumLonie) have been posting regularly on Twitter provisional and best teams results. In fact, it is a post by [@CalumLonie](https://twitter.com/CalumLonie) last year that is behind my motivation to look deeper at this problem.
+
+<blockquote class="twitter-tweet tw-align-center">
+<p lang="nl" dir="ltr">Best possible <a href="https://twitter.com/velogames?ref_src=twsrc%5Etfw">@velogames</a> team for the entire Spring Classics:<br><br>Mathieu Van Der Poel<br>Dylan Van Baarle<br>Matej Mohorič<br>Stefan Küng<br>Tiesj Benoot<br>Christophe Laporte<br>Dylan Teuns<br>Valentin Madouas<br>Ben Turner<br>Jan Tratnik<br>Magnus Sheffield<br>Tom Devriendt<br><br>11975 points, 100 credits</p>&mdash; Calum Lonie 🇮🇪🇨🇵🇪🇺 (@CalumLonie) <a href="https://twitter.com/CalumLonie/status/1519054469723525124?ref_src=twsrc%5Etfw">April 26, 2022</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+The Velogames Spring Classics is a unique competition. Depending on the year, up to 12 races are scheduled in this challenge. The goal is simple, build your team of 12 riders and maximize the number of points scored on all the 12 races. It is already hard enough, but the game becomes spicy if you add one more constraint: you have a limited number of transfers! You'll have to decide when you want to make a replacement, and who to keep even if they are not on the startlist for the race of the day. Let's take a look at the best teams you could have done in 2021 and 2022.
+
+
+# Collecting data
+
+Once again, we'll use some scrapping to collect the data on the Velogames website. The velogames owner makes an amazing job at organizing the competitions and keeping the website up-to-date, and has even mentioned the possibility to expose by API the different data used in the game (). 
+
+
+```{r}
+#| include: false
+
+library(tibble)
+library(rvest)
+library(stringr)
+library(purrr)
+library(dplyr)
+library(tidyr)
+```
+
+
+```{r}
+#| label: collect-vg-data
+#| code-summary: Scrap results from Velogames website
+#| cache: true
+
+# function to extract values from line in 
+# velogames spring classics race results page
+values_from_li <- function(li) {
+  li |>
+    html_elements("span:nth-child(2)") |>
+    html_text() |>
+    str_extract("^\\d+") |> 
+    as.integer() -> points
+  
+  li |> 
+    html_element("h3 > a") |> 
+    html_text() -> name
+  li |> 
+    html_elements("p") |> 
+    html_text() -> txt
+  
+  tibble(team = txt[[2L]],
+         name = name,
+         points = points)
+}
+
+# function to collect results for every races
+scrap_spring_classics_results <- function(year) {
+  
+  nb_races <- switch(as.character(year),
+                     "2021" = 11,
+                     "2022" = 12,
+                     "2023" = 12,
+                     stop("Must be one of 2021, 2022, 2023"))
+  
+  # get results for all individual races
+  map(1:nb_races, function(x) {
+    url <- paste0("https://www.velogames.com/spring-classics/",
+                  year, "/ridescore.php?ga=13&st=", x)
+    read_html(url) |> 
+      html_element("#users") |> 
+      html_element("ul") |> 
+      html_elements("li") |> 
+      map(values_from_li) |> 
+      bind_rows() 
+  }) -> race_results
+  
+  # get overall perf
+  overall <- 
+    paste0("https://www.velogames.com/spring-classics/",
+           year, "/ridescore.php?ga=13") |> 
+    read_html() |> 
+    html_element("#users") |> 
+    html_element("ul") |> 
+    html_elements("li") |> 
+    map(values_from_li) |> 
+    bind_rows() 
+  
+  # get race names
+  read_html(paste0("https://www.velogames.com/spring-classics/", year, "/ridescore.php")) |> 
+    html_element("div.wrap-content") |> 
+    html_elements("a") |> 
+    html_text() -> race_names
+  
+  # bind overall and individual results
+  race_results <- c(list(overall), race_results)
+  
+  # bind all results
+  map2(race_names, race_results, function(x, y) {
+    mutate(y, race = !!x)
+  }) |> 
+    bind_rows() |>
+    select(-team) |> 
+    pivot_wider(names_from = "race", values_from = points) |> 
+    rename(Rider = name) -> all_results
+  
+  return(all_results)
+}
+
+# function to collect riders cotation
+scrap_spring_classics_cost <- function(year) {
+  url <- paste0("https://www.velogames.com/spring-classics/",
+                year, "/riders.php")
+  read_html(url) |> 
+    html_element("table") |> 
+    html_table() |> 
+    select(Rider, Cost, Team)
+}
+
+# iterate over the years
+all_results <- 
+  map(2021:2022, scrap_spring_classics_results) |> 
+  setNames(2021:2022)
+
+# iterate over the years
+all_costs <- 
+  map(2021:2022, scrap_spring_classics_cost) |> 
+  setNames(2021:2022)
+
+# we merge the two tables together, replacing NA by 0
+# we use `TOT`:`Liège-Bastogne-Liège` to select columns
+# as Overall column is before the first race (MSR)
+# and LBL the last one of the challenge every year
+all_results_21_22 <- 
+  map2(all_results, all_costs, \(x, y) {
+    left_join(y, x, by = "Rider") |> 
+      mutate(across(`Overall`:`Liège-Bastogne-Liège`,
+                    ~replace_na(., 0)))
+  }) 
+```
+
+```{r}
+#| include: false
+library(reactable)
+
+# define function for table formatting
+format_table <- function(data, ...) {
+  reactable(data, 
+            defaultColDef = colDef(width = 55),
+            columns = list(
+              Rider = colDef(width = 210, sticky = "left"),
+              Overall = colDef(width = 70)
+            ), 
+            compact = TRUE, ...)
+}
+```
+
+
+::: {.panel-tabset}
+
+## 2021
+
+```{r}
+#| echo: false
+
+all_results_21_22[["2021"]] |>
+  rename(MSR = `Milano-Sanremo`,
+         BDP = `Oxyclean Classic Brugge-De Panne`,
+         E3 = `E3 Saxo Bank Classic`,
+         GW = `Gent-Wevelgem`,
+         DVV = `Dwars door Vlaanderen`,
+         RVV = `Ronde van Vlaanderen`,
+         SCH = `Scheldeprijs`,
+         BP = `De Brabantse Pijl `,
+         AGR = `Amstel Gold Race`,
+         FW = `La Flèche Wallonne`,
+         LBL = `Liège-Bastogne-Liège`) -> data_2021
+
+
+data_2021 |> 
+  select(-Team) |> 
+  format_table()
+```
+
+
+## 2022
+
+```{r}
+#| echo: false
+all_results_21_22[["2022"]] |>
+  rename(MSR = `Milano-Sanremo`,
+         BDP = `Minerva Classic Brugge-De Panne`,
+         E3 = `E3 Saxo Bank Classic`,
+         GW = `Gent-Wevelgem`,
+         DVV = `Dwars door Vlaanderen`,
+         RVV = `Ronde van Vlaanderen`,
+         SCH = `Scheldeprijs`,
+         BP = `Brabantse Pijl`,
+         PR = `Paris-Roubaix`,
+         AGR = `Amstel Gold Race`,
+         FW = `La Flèche Wallonne`,
+         LBL = `Liège-Bastogne-Liège`) -> data_2022
+
+
+data_2022 |> 
+  select(-Team) |> 
+  format_table()
+```
+
+:::
+
+
+# What were the best teams possible in 2021 and 2022?
+
+## Without transfers
+
+Similarly to the previous post about [Rivals manager best team](https://papa-rapha.github.io/website/posts/03-2023-velogames-knapsack/), it is possible to formulate this question as a linear programming problem. Let's start with a simplified problem. What would have been the best team possible without any replacement - i.e. if you had kept the same team from MSR (*Milano San remo*) to LBL (*Liège-Bastogne-Liège*). In that case, the problem can be formulated as follow:
+
+
+Maximize the total number of points collected
+
+$$
+\max \sum_{i=1}^N x_i\cdot\mathrm{Points}_i
+$$
+
+with a team of exactly 12 riders
+
+$$
+s.t. \sum_i x_i = 12
+$$
+with the team cost not exceeding 100 credits.
+
+$$
+\sum_i x_i\cdot\mathrm{Cost}_i \leq 100
+$$
+```{r}
+#| label: lp-wo-transfers
+#| code-summary: Function to solve LP problem
+
+library(lpSolve)
+maximize_score_wo_transfers <- function(data) {
+  # define obj function
+  # this corresponds to maximizing the sum of points 
+  f.obj <- data[["Overall"]]
+  
+  N <- nrow(data)
+  # define constraints
+  # 1st and 2nd constraints concern all x_i
+  # 3rd constraints is for cost constraint
+  # 4th is about cost constraint for top league
+  f.con <- matrix(c(rep(1, N),
+                    data[["Cost"]]),
+                  nrow = 2, byrow = TRUE)
+  
+  # Inequality signs for constraints
+  f.dir <- c("==", "<=")
+  
+  # Threshold values for constraints (rhs)
+  f.rhs <- c(12, 100)
+  
+  # Problem definition
+  linprog <- lp(direction = "max",
+                f.obj,
+                f.con,
+                f.dir, 
+                f.rhs,
+                binary.vec = 1:length(f.obj))
+  
+  # We return as a result the dataframe's rows corresponding to
+  # riders in the best team possible
+  result <- data[as.logical(linprog$solution), ]
+  return(result)
+}
+```
+
+::: {.panel-tabset}
+
+## 2021
+
+```{r}
+#| echo: false
+select(data_2021, -Team) |> 
+  maximize_score_wo_transfers() -> res_2021
+res_2021 |> 
+  format_table(pagination = FALSE)
+```
+
+## 2022
+
+```{r}
+#| echo: false
+select(data_2022, -Team) |> 
+  maximize_score_wo_transfers() -> res_2022
+res_2022 |> 
+  format_table(pagination = FALSE)
+```
+:::
+
+In 2021, the best team without transfers would have scored `r res_2021 |> pull(Overall) |> sum()` points, and  `r res_2022 |> pull(Overall) |> sum()` points in 2022. This means this strategy would have ranked 99th in 2021 and 26th in 2022. Not bad! Note that we have the same results than [@CalumLonie](https://twitter.com/CalumLonie), it's a relief!
+
+It seems quite obvious that with transfers, we could do much better. But, by how much?
+
+## With transfers
+
+### Toy problem
+
+Before trying to solve the problem at scale, let's imagine a simpler problem with way less riders. Let's think about a problem where we would have only 4 riders, and 3 races.
+
+
+```{r}
+#| label: toy-problem-table
+#| code-summary: Toy table
+tribble(~Rider, ~Cost, ~Race_1, ~Race_2, ~Race_3,
+        "A", 40, 200, 100, 0,
+        "B", 50, 300, 0, 300,
+        "C", 60, 0, 300, 300,
+        "D", 40, 100, 150, 100) |> 
+  reactable(columns = list(
+    Race_1 = colDef(name = "Race 1"),
+    Race_2 = colDef(name = "Race 2"),
+    Race_3 = colDef(name = "Race 3")
+  ))
+```
+
+Our team must have exactly two riders, and we are allowed 2 transfers only. What is the best strategy to optimize score ? We can formulate our problem as follow:
+
+$$
+\max \sum_{i=1}^4\sum_{j=1}^3 x_{i,j}\cdot\mathrm{Points}_i
+$$
+We want to maximize the sum of points obtained (by Riders A, B, .., D during races 1, 2, 3) with the constraints:
+
+
+$$
+\begin{align*} 
+s.t. & \sum_{i=1}^4 x_{i, 1} = 2 \\
+& \sum_{i=1}^4 x_{i, 2} = 2 \\
+& \sum_{i=1}^4 x_{i, 3} = 2 
+\end{align*}
+$$
+meaning that for each race, we cannot have more than two riders in the team, and
+
+$$
+\begin{align*} 
+s.t. & \sum_{i=1}^4 x_{i, 1}\cdot\mathrm{Cost}_i <= 100 \\
+& \sum_{i=1}^4 x_{i, 2}\cdot\mathrm{Cost}_i <= 100  \\
+& \sum_{i=1}^4 x_{i, 3}\cdot\mathrm{Cost}_i <= 100  
+\end{align*}
+$$
+we must still respect the constaint over the cost of our team. Also,
+
+### Full problem
+
+Let's change a little bit the problem formulation. Now, we are allowed to do 24 transfers. 
+
+
+```{r}
+#| code-summary: Function to maximize score with transfers
+maximize_score_w_transfers <- function(data) {
+  
+  tmp_data <- select(data, MSR:LBL)
+  N_riders <- nrow(tmp_data)
+  N_races  <- ncol(tmp_data)
+  
+  # define obj function
+  # this corresponds to maximizing the sum of points 
+  # over all stage races
+  f.obj <- select(data, MSR:LBL) |> as.matrix() |> c()
+  
+  # for every race, we must have 12 riders 
+  map(1:N_races, \(x) {
+    vec <- integer(N_riders * N_races)
+    vec[1:N_riders + (x - 1) * N_riders] <- 1L
+    vec
+  }) -> race_nb_rider_constraint
+  
+  # for every race, cost cannot exceed 100
+  map(1:N_races, \(x) {
+    vec <- integer(N_riders * N_races)
+    vec[1:N_riders + (x - 1) * N_riders] <- data[["Cost"]]
+    vec
+  }) -> race_cost_rider_constraint
+  
+  # we cannot have more than 24 transfers
+  # since constraint must be linear, we must control that
+  # |x_{i,j} - x{i,j+1}| 
+  
+  # Inequality signs for constraints
+  f.dir <- c("==", "<=")
+  
+  # Threshold values for constraints (rhs)
+  f.rhs <- c(12, 100)
+  
+  # Problem definition
+  linprog <- lp(direction = "max",
+                f.obj,
+                f.con,
+                f.dir, 
+                f.rhs,
+                binary.vec = 1:length(f.obj))
+  
+  # We return as a result the dataframe's rows corresponding to
+  # riders in the best team possible
+  result <- data[as.logical(linprog$solution), ]
+  return(result)
+}
+```
+
+
+# Best team: Oracle
+
+# Conclusion
+
+
+# Session Info {.appendix}
+
+```{r}
+#| label: appendix
+#| echo: false
+source("../../R/appendix.R")
+insert_appendix(
+  repo_spec = "papa-rapha/website", 
+  name = long_slug
+)
+```
+
+<details><summary>Toggle</summary>
+
+```{r}
+#| echo: false
+library(sessioninfo)
+# save the session info as an object
+pkg_session <- session_info(pkgs = "attached")
+# get the quarto version
+quarto_version <- system("quarto --version", intern = TRUE)
+# inject the quarto info
+pkg_session$platform$quarto <- paste(
+  system("quarto --version", intern = TRUE), 
+  "@", 
+  quarto::quarto_path()
+)
+# print it out
+pkg_session
+```
+
+</details>

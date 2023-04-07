@@ -9,6 +9,7 @@ listing:
   sort: date desc
   table-hover: true
   fields: [date, title]
+  feed: true
 ---
 
 ::: {#sample-listings}
