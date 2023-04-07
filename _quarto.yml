@@ -4,11 +4,11 @@ project:
 
 website:
   title: "papa rapha"
-  site-url: "https://papa-rapha.github.io/website"
-  repo-url: "https://github.com/papa-rapha/website"
+  site-url: "https://raphael-nedellec.github.io/website"
+  repo-url: "https://github.com/raphael-nedellec/website"
   repo-actions: issue
   navbar:
-    title: "PAPA<span class='icon-line'></span>RAPHA" 
+    title: "RAPHAEL<span class='icon-line'></span>NEDELLEC" 
     right:
       - text: "About"
         href: about.qmd
