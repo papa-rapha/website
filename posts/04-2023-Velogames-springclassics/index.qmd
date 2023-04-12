@@ -560,70 +560,51 @@ data_toy |>
     Race_3 = colDef(name = "Race 3", style = style_cell)
   ))
 ```
-We have the solution to our small example problem! The best stratgy is indeed to pick riders A and B for the first race, and then to swap them for riders C and D before race 2, using our two transfers available. This strategy maximize the rewars will being compliant with all our constaints. 
 
-
+We have the solution to our small example problem! The best strategy is indeed to pick riders A and B for the first race, and then to swap them for riders C and D before race 2, using our two transfers. This strategy maximizes the rewards while being compliant with all our constaints. 
 
 
 ### Full problem
 
-Let's change a little bit the problem formulation. Now, we are allowed to do 24 transfers. 
+We can now tackle the full scale problem. We have 875 riders for the year 2021, and 929 riders for the year 2022, and respectively 11 and 12 races. The problem size is much bigger. To be more efficient, and given the sparse nature of our constraints, we'll use a sparse matrix representation to represent our constraints.
 
 
 ```{r}
-#| code-summary: Function to maximize score with transfers
-maximize_score_w_transfers <- function(data) {
-  
-  tmp_data <- select(data, MSR:LBL)
-  N_riders <- nrow(tmp_data)
-  N_races  <- ncol(tmp_data)
-  
-  # define obj function
-  # this corresponds to maximizing the sum of points 
-  # over all stage races
-  f.obj <- select(data, MSR:LBL) |> as.matrix() |> c()
-  
-  # for every race, we must have 12 riders 
-  map(1:N_races, \(x) {
-    vec <- integer(N_riders * N_races)
-    vec[1:N_riders + (x - 1) * N_riders] <- 1L
-    vec
-  }) -> race_nb_rider_constraint
-  
-  # for every race, cost cannot exceed 100
-  map(1:N_races, \(x) {
-    vec <- integer(N_riders * N_races)
-    vec[1:N_riders + (x - 1) * N_riders] <- data[["Cost"]]
-    vec
-  }) -> race_cost_rider_constraint
-  
-  # we cannot have more than 24 transfers
-  # since constraint must be linear, we must control that
-  # |x_{i,j} - x{i,j+1}| 
-  
-  # Inequality signs for constraints
-  f.dir <- c("==", "<=")
-  
-  # Threshold values for constraints (rhs)
-  f.rhs <- c(12, 100)
-  
-  # Problem definition
-  linprog <- lp(direction = "max",
-                f.obj,
-                f.con,
-                f.dir, 
-                f.rhs,
-                binary.vec = 1:length(f.obj))
-  
-  # We return as a result the dataframe's rows corresponding to
-  # riders in the best team possible
-  result <- data[as.logical(linprog$solution), ]
-  return(result)
+#| label: fnc-fobj
+#| code-summary: Function to compute objective function
+
+#' @param race_matrix, matrix with n_riders rows and n_races col, each value being the perf for rider i at race j
+#' @param cost, vector of length n_riders, corresponding to the cost for every rider. The cost is the same for each race in the Spring Classics competition.
+comp_obj_func <- function(race_matrix, cost) {
+  cost_var <- rep(cost, ncol(race_matrix))
+  repl_var <- integer(nrow(race_matrix) * (ncol(race_matrix) - 1))
+  c(cost_var, repl_var)
 }
 ```
 
+```{r}
+#| label: fnc-fcon
+#| code-summary: Function to compute constraints
 
-# Best team: Oracle
+comp_constraints <- function(race_matrix, cost) {
+  c()
+}
+```
+
+```{r}
+#| label: solving-lps
+#| code-summary: Solving LPs for 2021 and 2022
+
+
+```
+
+
+
+# Best teams and optimal strategy
+
+## 2021
+
+## 2022
 
 # Conclusion
 
