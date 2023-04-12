@@ -337,7 +337,8 @@ tribble(~Rider, ~Cost, ~Race_1, ~Race_2, ~Race_3,
         "A", 40, 200, 100, 0,
         "B", 50, 300, 0, 300,
         "C", 60, 0, 300, 300,
-        "D", 40, 100, 150, 100) |> 
+        "D", 40, 100, 150, 100) -> data_toy
+data_toy |> 
   reactable(columns = list(
     Race_1 = colDef(name = "Race 1"),
     Race_2 = colDef(name = "Race 2"),
@@ -369,7 +370,200 @@ s.t. & \sum_{i=1}^4 x_{i, 1}\cdot\mathrm{Cost}_i <= 100 \\
 & \sum_{i=1}^4 x_{i, 3}\cdot\mathrm{Cost}_i <= 100  
 \end{align*}
 $$
-we must still respect the constaint over the cost of our team. Also,
+we must still respect the constaint over the cost of our team. We can add the transfer constraint. Let's explain what it means. Let's say rider A (i=1) is in the team for race one, and is not for race 2. That means that :
+
+$$
+x_{1,1} - x_{1,2} = 1 - 0 = 1
+$$
+On the contrary, let say that rider B (i=2) wasn't in the team for race A but entered for race 2, that means that:
+
+$$
+x_{2,1} - x_{2,2} = 0 - 1 = -1
+$$
+We need to limit the number of transfers to 2 in our toy problem. It could be translated by the constraint $\sum_{i,j} |x_{i,j} - x_{i,j-1}| \leq 4, \forall j\in [2,3]$. Since adding or removing a rider implies that the values goes up by one, and that adding a rider implies that we remove one necessarily (due to the size of the team having to be 12 at all time), 2 transfers means that our absolute values has to be 4. Let's illustrate this with our example. The problem is simple enough for us to identify the best team manually. For race one, we should pick riders A and B, and use our 2 transfers for race 2 by swapping riders A and B for riders C and D. Then, we should stick to riders C and D for the last race. If we take a look at the matrix representation of $\sum_{i,j} x_{i,j} - x_{i,j-1}, \forall j\in [2,3]$ :
+
+$$
+\begin{bmatrix}
+-1 & 0\\
+-1 & 0\\
+1 & 0\\
+1 & 0\\
+\end{bmatrix}
+$$
+we see that riders making a transfer implies both that we remove a rider from the team, for example $x_{1,2} - x_{1,1} = -1$ and that we add a new rider in the team $x_{3,2} - x_{3,1} = 1$. So the question is, how can we translate that into our LP problem? We need to linearize our constraint on the absolute values first. Indeed, to incorporate this constraint into our problem, we need to instead add the two equivalent linear constraints:
+
+$$
+|X| \leq k \iff X \leq k \ \ \mathrm{and} \ \ -X \leq k
+$$
+In our case, to count the total number of replacements, we'll make use of a new artificial variable, $s_{i,j}$. This will allow us to count that the total number of replacement will not be above the allowed number.
+
+Now that we have our ideas in place, let's build our linear program piece by piece. First, we need to define our objective function. Our goal is to maximize our total number of points. We have 4 riders and 3 races, so we have 12 binary variables to compute corresponding to those combinations. We have also introduced our artificial variables to count the number of replacements. The team for the first race is made without using any replacement, which only start to count at the second race if we make any change. Therefore, we need to count all the changes between $x_{i,1}, \forall i$ and $x_{i,2}, \forall i$, and $x_{i,2}, \forall i$ and $x_{i,3}, \forall i$, so $4*2 = 8$ possible replacements. 
+
+Using `lpSolve`R library, we can define our objective function as:
+
+```{r}
+#| label: lp-w-rep-obj-func
+#| code-summary: Objective function
+
+# define obj function
+# this corresponds to maximizing the sum of points
+# over all stage races
+# we also add some zeros for the variables corresponding to transfers
+# we still have to estimate those artificial variables
+# but they don't matter in the f.obj maximization
+N_riders <- 4L
+N_races  <- 3L
+points <- c(data_toy$Race_1, data_toy$Race_2, data_toy$Race_3)
+transfers <- numeric(N_riders * (N_races - 1L))
+f.obj <- c(points, transfers)
+```
+
+Then, we need to take care of the constraints:
+
+- Team must be of size 2 for all 3 races
+- Cost cannot exceed 100
+- We are allowed 2 transfers only
+
+The first constraint can be written as:
+
+```{r}
+#| label: lp-w-rep-constr-size
+#| code-summary: Team size constraint
+
+# each constraint is a vector of size 20:
+# the first 12 values correspond to the actual x_{i,j}
+# the last 8 to the s_{i,j} corresponding to the artificial variables
+# introduced for the replacements counting
+con.team_size <- c(
+  c(rep(1, 4), rep(0, 16)),            # team size 1st race
+  c(rep(0, 4), rep(1, 4), rep(0, 12)), # team size 2nd race
+  c(rep(0, 8), rep(1, 4), rep(0, 8))   # team size 3rd race
+)
+
+sign.team_size <- rep("==", 3)
+values.team_size <- rep(2, 3)
+```
+
+The cost constraint is:
+
+```{r}
+#| label: lp-w-rep-constr-cost
+#| code-summary: Team cost constraint
+
+cost <- data_toy$Cost
+con.team_cost <- c(
+  c(cost, rep(0, 16)),                 # team cost 1st race
+  c(rep(0, 4), cost, rep(0, 12)),      # team cost 2nd race
+  c(rep(0, 8), cost, rep(0, 8))        # team cost 3rd race
+)
+
+sign.team_cost <- rep("<=", 3)
+values.team_cost <- rep(100, 3)
+```
+
+And now, the replacements. We introduce 8 + 1 constraints: one for each possible substitution for races 2 and 3 and a final one to ensure that we do not have more than 2 replacements. For every possible replacement, we need to make sure that:
+
+$$
+\begin{align*}
+x_{i,j} - x_{i,j-1} &\leq s_{i,j}, \forall i \in [1,4], \forall j \in [2,3]\\
+x_{i,j-1} - x_{i,j} &\leq s_{i,j}, \forall i \in [1,4], \forall j \in [2,3]
+\end{align*}
+$$
+
+We can write these constraints as:
+
+$$
+\begin{align*}
+x_{i,j} - x_{i,j-1} - s_{i,j} &\leq 0, \forall i \in [1,4], \forall j \in [2,3]\\
+x_{i,j-1} - x_{i,j} -s_{i,j} &\leq 0, \forall i \in [1,4], \forall j \in [2,3]
+\end{align*}
+$$
+
+And therefore, write the constraints in the code as:
+
+```{r}
+#| label: lp-w-rep-constr-repl
+#| code-summary: Replacements' constraints
+
+con.repl <- c(
+  c(1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0), # s_{1,2}
+  c(0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0), # s_{2,2}
+  c(0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0), # s_{3,2}
+  c(0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0), # s_{4,2}
+  c(0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0), # s_{1,3}
+  c(0, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0), # s_{2,3}
+  c(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0), # s_{3,3}
+  c(0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1), # s_{4,3}
+  c(-1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0), # s_{1,2}
+  c(0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0), # s_{2,2}
+  c(0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0), # s_{3,2}
+  c(0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0), # s_{4,2}
+  c(0, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0), # s_{1,3}
+  c(0, 0, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0), # s_{2,3}
+  c(0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0), # s_{3,3}
+  c(0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1)  # s_{4,3}
+)
+
+sign.repl <- rep("<=", 16)
+values.repl <- integer(16)
+```
+
+Finally, we must make sure that we limit the total number of replacements.
+
+```{r}
+#| label: lp-w-rep-constr-repl-tot
+#| code-summary: Total number of replacements
+con.tot_repl <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1)
+sign.tot_repl <- c("<=")
+values.tot_repl <- c(4) # 2 * 2
+```
+
+
+```{r}
+#| label: solving-the-lp
+#| code-summary: Linear Program
+
+f.obj <- f.obj
+f.con <- matrix(c(con.team_size, con.team_cost, con.repl, con.tot_repl),
+                byrow = TRUE,
+                nrow = 23)
+f.dir <- c(sign.team_size, sign.team_cost, sign.repl, sign.tot_repl)
+f.rhs <- c(values.team_size, values.team_cost, values.repl, values.tot_repl)
+
+# Problem definition
+linprog <- lp(direction = "max",
+              f.obj,
+              f.con,
+              f.dir,
+              f.rhs,
+              all.bin = TRUE)
+linprog
+```
+```{r}
+#| label: success-table
+#| code-summary: Results' table
+
+sol <- matrix(linprog$solution[1:12], ncol = 3)
+colnames(sol) <- c("Race_1", "Race_2", "Race_3")
+
+style_cell <- function(value, index, name) {
+  s <- sol[index, name]
+  if (s > 0) {
+    list(backgroundColor = "#41b148")
+  }
+}
+
+data_toy |> 
+  reactable(columns = list(
+    Race_1 = colDef(name = "Race 1", style = style_cell),
+    Race_2 = colDef(name = "Race 2", style = style_cell),
+    Race_3 = colDef(name = "Race 3", style = style_cell)
+  ))
+```
+We have the solution to our small example problem! The best stratgy is indeed to pick riders A and B for the first race, and then to swap them for riders C and D before race 2, using our two transfers available. This strategy maximize the rewars will being compliant with all our constaints. 
+
+
+
 
 ### Full problem
 
